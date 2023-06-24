@@ -96,11 +96,74 @@ def upload_file_to_synology(sid, filepath, upload_path="/home/ufn"):
         print(f"Exception details: {e.__dict__}")
 
 
+def get_share_link(sid, filepath, upload_path="/home/ufn"):
+    url = f"{PUBLIC_PREFIX}/webapi/entry.cgi"
+    filename = os.path.basename(filepath)
+    path = f"{upload_path}/{filename}"
+    
+    payload = {
+        "api": "SYNO.FileStation.Sharing",
+        "version": 2,
+        "method": "create",
+        "path": path,
+        "_sid": sid
+    }
+
+    try:
+        response = requests.get(url, params=payload)
+
+        if response.status_code == 200:
+            data = response.json()
+            if data['success']:
+                link = data['data']['links'][0]['url']
+                return link
+            else:
+                print("Failed to create share link, please check your inputs and permissions.")
+        else:
+            print(f"Request failed with status code: {response.status_code}")
+    except requests.exceptions.RequestException as e:
+        print(f"Request failed due to an error: {e}")
+
+    return None
+
+
 def upload_file(filepath, account, password):
     print(f'Uploading file: {filepath}')
     sid = get_sid(account, password)
     create_folder(sid)
     upload_file_to_synology(sid, filepath)
+    link = get_share_link(sid, filepath)
+    print(f'Share link: {link}')
+    return link
+
+def get_dir_share_link(sid, path, upload_path="/home/ufn"):
+    url = f"{PUBLIC_PREFIX}/webapi/entry.cgi"
+    full_path = f"{upload_path}/{path}"
+    
+    payload = {
+        "api": "SYNO.FileStation.Sharing",
+        "version": 2,
+        "method": "create",
+        "path": full_path,
+        "_sid": sid
+    }
+
+    try:
+        response = requests.get(url, params=payload)
+
+        if response.status_code == 200:
+            data = response.json()
+            if data['success']:
+                link = data['data']['links'][0]['url']
+                return link
+            else:
+                print("Failed to create share link, please check your inputs and permissions.")
+        else:
+            print(f"Request failed with status code: {response.status_code}")
+    except requests.exceptions.RequestException as e :
+        print(f"Request failed due to an error: {e}")
+
+    return None
 
 def upload_directory(dirpath, account, password):
     print(f'Uploading directory: {dirpath}')
@@ -112,3 +175,7 @@ def upload_directory(dirpath, account, password):
     for filename in os.listdir(dirpath):
         if os.path.isfile(os.path.join(dirpath, filename)):
             upload_file_to_synology(sid, os.path.join(dirpath, filename), upload_path=upload_path)
+
+    link = get_dir_share_link(sid, dir_name, upload_path="/home/ufn")
+    print(f'Share link for directory: {link}')
+    return link
