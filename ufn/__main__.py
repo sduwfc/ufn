@@ -1,7 +1,7 @@
 import argparse
 import os
 import json
-import getpass
+from getpass import getpass
 
 from .utils import upload_file,upload_directory
 
@@ -42,12 +42,14 @@ def main():
         if not os.path.isfile(args.file):
             print(f"The file {args.file} does not exist")
             return
-        upload_file(args.file, account, password)
+        abs_file_path = os.path.abspath(args.file)
+        upload_file(abs_file_path, account, password)
     elif args.dir:
         if not os.path.isdir(args.dir):
             print(f"The directory {args.dir} does not exist")
             return
-        upload_directory(args.dir, account, password)
+        abs_dir_path = os.path.abspath(args.dir)
+        upload_directory(abs_dir_path, account, password)
 
 if __name__ == '__main__':
     main()

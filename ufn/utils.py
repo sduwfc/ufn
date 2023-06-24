@@ -1,5 +1,6 @@
 import requests
 from tqdm import tqdm
+from requests_toolbelt.multipart.encoder import MultipartEncoder, MultipartEncoderMonitor
 import os
 
 PUBLIC_PREFIX = "http://219.142.246.77:65000"
@@ -33,33 +34,7 @@ def get_sid(account, password):
 
     return None
 
-def check_folder_exists(sid, folder_path):
-    url = f"{PUBLIC_PREFIX}/webapi/entry.cgi"
-    payload = {
-        "api": "SYNO.FileStation.List",
-        "version": 2,
-        "method": "getinfo",
-        "path": folder_path,
-        "_sid": sid
-    }
-
-    try:
-        response = requests.get(url, params=payload)
-        if response.status_code == 200:
-            data = response.json()
-            if data['success']:
-                return True
-    except requests.exceptions.RequestException as e:
-        print(f"Request failed due to an error: {e}")
-    
-    return False
-
-def create_default_folder(sid, path="/home", name="ufn"):
-    folder_path = os.path.join(path, name)
-    if check_folder_exists(sid, folder_path):
-        print(f"Folder {name} already exists at path {path}. Skipping creation.")
-        return
-
+def create_folder(sid, path="/home", name="ufn"):
     url = f"{PUBLIC_PREFIX}/webapi/entry.cgi"
     payload = {
         "api": "SYNO.FileStation.CreateFolder",
@@ -76,7 +51,7 @@ def create_default_folder(sid, path="/home", name="ufn"):
         if response.status_code == 200:
             data = response.json()
             if data['success']:
-                print(f"Successfully created default folder {name} at path {path}")
+                print(f"Default folder {name} at path {path}")
             else:
                 print("Failed to create folder, please check your inputs and permissions.")
         else:
@@ -85,44 +60,55 @@ def create_default_folder(sid, path="/home", name="ufn"):
         print(f"Request failed due to an error: {e}")
 
 
-def upload_file_to_synology(sid, filepath):
-    url = f"{PUBLIC_PREFIX}/webapi/entry.cgi"
+def create_callback(encoder):
+    progress_bar = tqdm(total=encoder.len, ncols=100, unit='B', unit_scale=True)
+
+    def callback(monitor):
+        progress_bar.update(monitor.bytes_read - progress_bar.n)
+
+    return callback
+
+def upload_file_to_synology(sid, filepath, upload_path="/home/ufn"):
+    url = f"{PUBLIC_PREFIX}/webapi/entry.cgi?api=SYNO.FileStation.Upload&version=2&method=upload&_sid={sid}"
     filename = os.path.basename(filepath)
-    upload_path = '/home/ufn'
-    files = {
-        'file': (filename, open(filepath, 'rb')),
-        'path': (None, upload_path),
-        'create_parents': (None, 'false'),
-        'filename': (None, filename),
-    }
-    params = {
-        "api": "SYNO.FileStation.Upload",
-        "method": "upload",
-        "version": 2,
-        "_sid": sid
-    }
-    
     try:
-        response = requests.post(url, files=files, params=params)
-        if response.status_code == 200:
-            data = response.json()
-            if data['success']:
-                print(f"File {filename} uploaded successfully to {upload_path}")
+        with open(filepath, 'rb') as payload:
+            args = {
+                'path': upload_path,
+                'create_parents': 'true',
+                'overwrite': 'true'
+            }
+            data = {**args, 'file': (filename, payload, 'application/octet-stream')}
+            encoder = MultipartEncoder(fields=data)
+            monitor = MultipartEncoderMonitor(encoder, create_callback(encoder))
+            headers = {'Content-Type': monitor.content_type}
+            response = requests.post(url, data=monitor, headers=headers, verify=True)
+            if response.status_code == 200:
+                data = response.json()
+                if data['success']:
+                    print(f"File {filename} uploaded successfully to {upload_path}")
+                else:
+                    print("Failed to upload file, please check your inputs and permissions.")
             else:
-                print("Failed to upload file, please check your inputs and permissions.")
-        else:
-            print(f"Request failed with status code: {response.status_code}")
+                print(f"Request failed with status code: {response.status_code}")
     except requests.exceptions.RequestException as e:
         print(f"Request failed due to an error: {e}")
+        print(f"Exception details: {e.__dict__}")
 
 
 def upload_file(filepath, account, password):
     print(f'Uploading file: {filepath}')
     sid = get_sid(account, password)
-    create_default_folder(sid)
+    create_folder(sid)
     upload_file_to_synology(sid, filepath)
 
 def upload_directory(dirpath, account, password):
     print(f'Uploading directory: {dirpath}')
-    get_sid(account, password)
+    sid = get_sid(account, password)
+    dir_name = os.path.basename(dirpath)
+    create_folder(sid, path="/home/ufn", name=dir_name)
+    upload_path = f"/home/ufn/{dir_name}"
 
+    for filename in os.listdir(dirpath):
+        if os.path.isfile(os.path.join(dirpath, filename)):
+            upload_file_to_synology(sid, os.path.join(dirpath, filename), upload_path=upload_path)

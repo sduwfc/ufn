@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='ufn',
-    version='0.1.1',
+    version='1.0.0',
     packages=find_packages(),
     description='upload for nas',
     long_description=open('README.md').read(),
@@ -20,4 +20,10 @@ setup(
         'Programming Language :: Python :: 3.8',
         'Programming Language :: Python :: 3.9',
     ],
+    install_requires=[
+        'requests',
+        'tqdm',
+        'requests_toolbelt',
+    ],
 )
+
