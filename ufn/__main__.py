@@ -3,7 +3,7 @@ import os
 import json
 from getpass import getpass
 
-from .utils import upload_file,upload_directory
+from .utils import upload_file,upload_directory,get_sid
 
 UFN_CONFIG_DIR = 'ufn_config'  # The name of the config directory
 UFN_CONFIG_FILE = 'config.json'  # The name of the config file
@@ -30,6 +30,13 @@ def main():
         should_create_config = input("Would you like to create one to save your account and password? (y/n) ").lower() == 'y'
         account = input("Please enter your account: ")
         password = getpass("Please enter your password: ")
+
+        # Try to get sid with given account and password
+        sid = get_sid(account, password)
+        if not sid:
+            print("Failed to get sid with given account and password.")
+            print("Please check if your account and password are correct, exiting.")
+            return
 
         if should_create_config:
             # Ensure the directory exists
